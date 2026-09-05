@@ -29,3 +29,5 @@ Notion：[UGC 影片生成器 — 規格書 v2.0](https://app.notion.com/p/UGC-v
 
 ## License
 Private — OpenClaw Project
+
+<!-- Last validated: 2026-09-06 by OpenClaw Overnight Dev -->
