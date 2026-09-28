@@ -14,6 +14,9 @@ export function VideoExportButton({ script, canvasRef, onError }: Props) {
   const [state, setState] = useState<'idle' | 'tts' | 'recording' | 'encoding' | 'done'>('idle')
   const [progress, setProgress] = useState(0)
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null)
+  // Generated inside the recording handler (event-time), not during render —
+  // satisfies react-hooks/purity (`Date.now()` is impure on render).
+  const [downloadName, setDownloadName] = useState<string | null>(null)
 
   const isValid = script.trim().length > 0
 
@@ -22,6 +25,7 @@ export function VideoExportButton({ script, canvasRef, onError }: Props) {
     setState('tts')
     setProgress(0)
     setDownloadUrl(null)
+    setDownloadName(null)
 
     try {
       // Speak TTS (background audio)
@@ -52,6 +56,9 @@ export function VideoExportButton({ script, canvasRef, onError }: Props) {
           const blob = await recorder.stop()
           const url = URL.createObjectURL(blob)
           setDownloadUrl(url)
+          // Event-time, not render-time — keeps behavior (each new export gets a
+          // fresh timestamp) while satisfying react-hooks/purity.
+          setDownloadName(`ugc-${Date.now()}.webm`)
           setState('done')
           setProgress(100)
         }, totalSec * 1000)
@@ -115,10 +122,10 @@ export function VideoExportButton({ script, canvasRef, onError }: Props) {
         </div>
       )}
 
-      {state === 'done' && downloadUrl && (
+      {state === 'done' && downloadUrl && downloadName && (
         <a
           href={downloadUrl}
-          download={`ugc-${Date.now()}.webm`}
+          download={downloadName}
           className="w-full bg-emerald-500 hover:bg-emerald-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition"
         >
           <Download size={16} /> 下載 .webm 影片
