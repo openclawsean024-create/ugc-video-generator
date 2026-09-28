@@ -7,6 +7,19 @@
   --color-accent: #ec4899;
   --color-accent-hover: #db2777;
   --color-info: #38bdf8;
+
+  /* Studio workbench (light-mode) tokens — auto-generate utilities like
+     bg-canvas, bg-panel, text-ink, text-muted, border-line, bg-purple,
+     bg-purple-soft, text-green, bg-dark. Applied inside app/studio tree only. */
+  --color-canvas: #f5f6f8;
+  --color-panel: #fff;
+  --color-ink: #17191f;
+  --color-muted: #7f8490;
+  --color-line: #e8e9ed;
+  --color-purple: #6948ef;
+  --color-purple-soft: #f0edff;
+  --color-green: #1d9a70;
+  --color-dark: #1e1b2b;
 }
 
 html, body {
