@@ -1,201 +1,128 @@
-# ugc-video-generator · PRD v3.0.2 等級規格書
+# UGC 短影片生成器（ugc-video-generator）— 產品需求規格 v4.0
 
-> 自動生成：2026-09-06（Sean 10-repo-fleet Batch 7C）
-> 對齊 SPEC v3.0 契約（SPEC §1–§19 全部套用）
-> 前置：v2.0 純前端 MVP pivot（2026-07-10）
+> 版本：v4.0（評估與 PRD 重建）｜更新日期：2026-11-16｜狀態：文件重建，**建議暫緩**
+> 主 repo：`openclawsean024-create/ugc-video-generator`（預設分支 `main`，重建基準 commit `370b377`）
+> 候選併入 repo：無
+> 取代：`PRD/SPEC.md` v3.0.2（2026-09-06）。根目錄 `SPEC.md`（v2.2.1，826 行）為更舊版本，本次不改動，與本文件衝突時以本文件為準。舊版的市場規模（35 萬家、200 萬支／月）與願付價格為未查證假設，本版不再引用。
 
----
-
-## 1. 產品概述
-
-### 1.1 問題陳述
-UGC（User Generated Content）短影片創作者面對**雙重摩擦**：
-1. 想做 AI 主播 / 虛擬人講解，但**任何方案都要 API key**（HeyGen / D-ID / Synthesia 月費 NT$1,500+）
-2. 就算有 API key，後端部署常因單一服務失敗而整個卡死
-
-本工具砍掉這兩層摩擦——純瀏覽器、零 API key、零後端。**打開網頁、貼稿、選 avatar、選尺寸、3 步拿到 .webm 短影片**。
-
-### 1.2 目標使用者
-| Persona | 工作情境 | 主要任務 |
-|---|---|---|
-| Primary · 阿明（YouTube Shorts 創作者）| 週 5 支，要 AI 主播講解 | 貼稿 → 選 9:16 → 選科技 avatar → 輸出 |
-| Secondary · Linda（IG Reels 編輯）| 日 2-3 支，要快速品牌 | 選 1:1 → 選專業 avatar → 加字幕 |
-| Tertiary · 浩子（podcast 推廣小編）| 偶爾做預告 | 選休閒 avatar → 加亮黃字幕 → 輸出 |
-
-### 1.3 核心價值主張
-> **「零 API key、純瀏覽器 — 貼稿 + 選 avatar + 選尺寸，3 步出 .webm 短影片。」**
-
-### 1.4 Non-Goals（明確不做）
-- ❌ 真實 AI 虛擬人（HeyGen / D-ID 紅海）
-- ❌ 雲端後端帳號 / 訂閱
-- ❌ 影音剪輯 / 多軌混音（CapCut 紅海）
-- ❌ AI 圖像生成（SDXL / Midjourney 紅海）
-- ❌ 多語言字幕（v1 繁中 only）
-- ❌ 多人協作 / 後台
-- ❌ 排程 / 自動發布（Buffer / Later 紅海）
+本文件的「已實作／部分／未實作」皆依 2026-11-16 閱讀 `main` 程式碼與 GitHub Actions 紀錄判斷。本機無法執行 node，**所有 lint／test／build 皆未在本機執行**；瀏覽器錄影行為亦未實測。
 
 ---
 
-## 2. 使用者場景與流程
+## §0 評估結論
 
-### 2.1 使用者流程圖
-
-```mermaid
-flowchart LR
-  A[打開首頁] --> B[貼腳本]
-  B --> C[選 avatar<br/>👔 專業 / 🎒 休閒 / 🌿 生活 / 💻 科技]
-  C --> D[選影片尺寸<br/>9:16 / 1:1 / 16:9]
-  D --> E[選字幕位置 + 顏色]
-  E --> F[選 TTS 語音（瀏覽器內建）]
-  F --> G[按「預覽」]
-  G --> H[Canvas 繪製 avatar + 字幕<br/>+ TTS 播放]
-  H --> I{滿意?}
-  I -->|否| B
-  I -->|是| J[按「匯出」]
-  J --> K[MediaRecorder 抓 canvas stream + TTS audio]
-  K --> L[組合成 .webm]
-  L --> M[下載 .webm]
-```
-
-### 2.2 主要場景
-
-| 場景 | 輸入 | 輸出 | 成功條件 |
-|---|---|---|---|
-| 1. 貼稿→選 avatar | 腳本 + 4 種 avatar | 預覽畫面 | Canvas 繪製 gradient + emoji + 字幕 |
-| 2. 切換尺寸 | 9:16 / 1:1 / 16:9 | Canvas 重新調整 | 比例正確、可即時預覽 |
-| 3. 切換字幕 | 位置 + 4 種顏色 | 字幕重新渲染 | 即時更新 Canvas |
-| 4. 播放預覽 | (點預覽) | TTS 講稿 + 字幕動態 | 繁中 zh-TW voice |
-| 5. 匯出 .webm | (點匯出) | .webm 檔 | vp9 + opus、可在瀏覽器 / VLC 播 |
-
----
-
-## 3. 功能需求
-
-| FR | 名稱 | 優先級 | 狀態 |
-|---|---|---|---|
-| FR-001 | 腳本輸入（textarea）| P0 | ✅ shipped |
-| FR-002 | 4 種 avatar 預設（專業 / 休閒 / 生活 / 科技）| P0 | ✅ shipped |
-| FR-003 | 3 種影片尺寸（9:16 / 1:1 / 16:9）| P0 | ✅ shipped |
-| FR-004 | 4 種字幕顏色 | P0 | ✅ shipped |
-| FR-005 | 字幕位置切換（top / center / bottom）| P0 | ✅ shipped |
-| FR-006 | Canvas 即時預覽（gradient + emoji + 字幕）| P0 | ✅ shipped |
-| FR-007 | TTS 旁白（speechSynthesis，zh-TW）| P0 | ✅ shipped |
-| FR-008 | WebM 匯出（vp9 + opus）| P0 | ✅ shipped |
-| FR-009 | 純前端、零 API key、零後端 | P0 | ✅ shipped |
-| FR-010 | Tailwind v4 風格（簡潔 + 印刷感）| P1 | ✅ shipped |
-| FR-011 | 匯出時長估算（依字數 + 1s padding）| P1 | ✅ shipped |
-| FR-012 | SSR 安全的 `useEffect` 初始化 | P0 | ✅ shipped |
-| FR-013 | GHA CI 4-job workflow | P1 | ✅ shipped (v3.0.2) |
-| FR-014 | PRD v3.0.2 規格書 + CHANGELOG | P1 | ✅ shipped (v3.0.2) |
-| FR-015 | 單元測試（vitest，format dims + persona + recorder）| P1 | ⏳ planned |
-| FR-016 | 上傳客製 avatar 圖片 | P2 | ⏳ planned |
-| FR-017 | 字幕時間軸分段 | P2 | ⏳ planned |
-| FR-018 | MP4 匯出（ffmpeg.wasm）| P2 | ⏳ planned |
-| FR-019 | 多語言字幕（英 / 日 / 韓）| P2 | ⏳ planned |
-| FR-020 | PWA / 離線可匯出 | P2 | ⏳ planned |
-
----
-
-## 4. Non-Functional Requirements
-
-| 維度 | 需求 |
+| 項目 | 結論 |
 |---|---|
-| Performance | 啟動 < 1.5s；WebM 渲染 = 腳本時長；Canvas 重繪 < 16ms |
-| Security | 無後端、零資料外洩；腳本不離開瀏覽器 |
-| Privacy | 零 telemetry、零 analytics |
-| Accessibility | WCAG 2.1 AA（按鈕 aria-label、字幕對比 ≥ 4.5:1）|
-| Browser | Modern evergreen（必須支援 MediaRecorder + canvas.captureStream）|
-| Responsive | 桌機優先；行動 ≥ 360px 可閱讀、不主打手機操作 |
-| Build | Next.js 16 + Turbopack |
-| Codec | 預設 vp9 + opus（fallback vp8）|
+| 現況完成度 | **25 / 100**。`/` 可輸入腳本、選 4 種 emoji 頭像、3 種比例與字幕樣式，用 `MediaRecorder` 錄下 canvas 成 `.webm`；但**瀏覽器 TTS 的聲音沒有接進錄影**（程式註解自承），匯出影片是無聲的；字幕是整段文字、不隨語音切換；錄影長度以「每字 0.3 秒」估算。`/studio` 是完整的工作台 UI 原型，所有按鈕只跳「原型示意」提示，資料皆為 mock，且首頁沒有連結。零測試。 |
+| 獲利潛力 | **低（以目前純前端方案）**。「AI 主播／UGC 廣告影片」的需求真實存在，但能賣錢的是逼真數位人、自然語音、口型同步與廣告素材量產，這些都需要付費模型或 API；HeyGen、Synthesia、D-ID、CapCut 等已占據市場（價格與在地化程度待確認）。emoji 頭像 + 無聲 webm 無法與之競爭。 |
+| 目標客群（假設） | 台灣小型電商、品牌小編、需要量產短影音廣告素材的代操團隊。 |
+| 獲利模式（假設） | 免費增值（點數制）或代操專案建置。 |
+| 主要風險 | ① **廣告法規**：`/studio` 的定位是「創作者分享體驗」式 UGC 廣告；以 AI 虛擬人假扮真實使用者見證，可能構成不實或引人錯誤廣告（公平交易法、公平會推薦見證相關規範，待法務確認）；若商品為食品、化粧品，另有誇大功效限制（待法務確認）。② **肖像與聲音權**：若改用真人形象或聲音克隆，需書面授權。③ **平台條款**：IG、TikTok、YouTube 對 AI 生成內容有標示要求（細節待確認）；`.webm` 是否能直接上傳各平台待確認。④ **成本**：真正的 AI 主播需按秒計費的外部 API，免費增值毛利不確定。 |
+| 建議 | **暫緩**。目前程式與「AI 主播」承諾差距大，要補的核心能力（數位人、語音、口型）全靠付費外部服務，且有廣告法規風險。若 Sean 想保留，M1 只做「誠實可用的字幕短影片工具」（使用者自己的聲音 + 分句字幕 + AI 生成標示），驗證是否有人用，再決定是否接付費 AI。 |
+| 與其他產品重疊 | 本批 `tw-meme-generator` 同屬社群素材工具，可共用匯出尺寸與分享流程概念；第一批 10 個產品清單本 brief 未提供，重疊情形待確認。 |
 
 ---
 
-## 5. 技術架構
+## 1. 問題（假設）
 
-```
-ugc-video-generator (Next.js 16 App Router)
-├── app/
-│   ├── page.tsx                 # 主 UI（腳本 / avatar / 尺寸 / 字幕 / 預覽 / 匯出）
-│   ├── layout.tsx               # root layout
-│   ├── globals.css              # Tailwind v4
-│   ├── components/
-│   │   ├── PreviewCanvas.tsx    # Canvas 即時繪製
-│   │   └── VideoExporter.tsx    # MediaRecorder 邏輯封裝
-│   └── lib/
-│       ├── types.ts             # Avatar / Format / Subtitle 等 enum + 對照表
-│       └── videoRecorder.ts     # WebmRecorder class + speak() helper
-├── PRD/
-│   ├── SPEC.md
-│   └── CHANGELOG.md
-├── .github/workflows/ci.yml
-├── next.config.ts               # App Router + Turbopack
-├── tsconfig.json
-├── tailwind / postcss
-└── vercel.json                  # framework: nextjs
-```
+小型品牌與小編需要大量 9:16 短影音素材，但真人拍攝成本高、自己入鏡有心理門檻；國際 AI 影片工具以英文為主、按量計費。此需求是否足以支撐付費，**未經驗證**。
 
-### 5.1 Module Map
-- `app/` — 主要程式碼（單一頁面 + 2 個 components + 2 個 lib）
-- `tests/` — 單元測試（v3.0.2 之後可加）
-- `.next/` — 構建產物（gitignore）
-- `.github/workflows/` — CI/CD
+## 2. 目標客群
 
-### 5.2 環境變數
-- 無（純前端 / 零 API key）
-
-### 5.3 降級策略
-- MediaRecorder 不支援 vp9 → fallback vp8
-- 瀏覽器無 TTS voice → 仍可預覽 canvas 字幕、匯出無聲
-- Canvas 不可用 → 顯示「請使用現代瀏覽器」
-
----
-
-## 6. Definition of Done
-
-- [x] FR P0 全部實作（FR-001 ~ FR-009）
-- [x] `npm run build` 綠
-- [x] `npm run lint` 0 error
-- [x] GHA CI 4-job workflow（lint / test / build / deploy to Vercel）
-- [x] README 反映現況
-- [x] PRD/SPEC.md v3.0.2 等級規格書
-- [x] PRD/CHANGELOG.md 含 v3.0.2 條目
-- [x] Vercel deploy 設定完成（vercel.json: framework: nextjs）
-- [x] 純前端、零 API key、零後端
-- [x] 零 telemetry、零資料外洩
-
----
-
-## 7. 部署契約
-
-| 環境 | 目標 | 觸發 |
+| 角色 | 描述 | 驗證狀態 |
 |---|---|---|
-| Production | Vercel | push to main |
-| Preview | Per-PR（Vercel 自動）| PR opened |
+| 電商／品牌小編 | 每週需要多支商品短影片 | 未驗證 |
+| 代操團隊 | 為多個客戶量產廣告素材 | 未驗證 |
+| 自媒體新手 | 不想入鏡 | 未驗證 |
 
-### 7.1 GHA Workflow
-- `.github/workflows/ci.yml`
-- jobs: lint / test / build / deploy
-- deploy: **Vercel**（Vercel Hobby 平台已掛 GitHub auto-deploy；GHA deploy 為輔助）
+## 3. 競品與差異
 
-### 7.2 環境變數
-- 無需 server-side secret
-- 無 BYOK
+| 競品 | 類型 | 備註 |
+|---|---|---|
+| HeyGen、Synthesia、D-ID | AI 數位人影片 | 價格與中文支援待確認 |
+| CapCut | 剪輯 + 範本 + AI 功能 | 待確認 |
+| Canva 影片 | 範本影片 | 待確認 |
 
----
+差異化假設（零 API key、繁中、免費）在「無聲 + emoji 頭像」的現況下不成立。
 
-## 8. Out of Scope（不做的）
+## 4. 功能需求
 
-- ❌ 帳號系統（永遠不做）
-- ❌ 付費牆（永遠不做）
-- ❌ 原生 App
-- ❌ 多語系字幕（v1 繁中 only）
-- ❌ 排程 / 自動發布
-- ❌ 多人協作 / 後台
-- ❌ 真實 AI 虛擬人像（HeyGen / D-ID 紅海）
+狀態：已實作／部分／未實作（皆在 `ugc-video-generator`）。
 
----
+| FR | 需求 | 優先 | 狀態 | 說明（以程式為準） |
+|---|---|---|---|---|
+| FR-001 | 腳本輸入與 TTS 預覽 | P0 | 已實作 | `speechSynthesis`，`zh-TW`，可選瀏覽器語音 |
+| FR-002 | 頭像選擇 | P0 | 部分 | 4 種 emoji + 漸層背景，非 AI 主播 |
+| FR-003 | 比例選擇（9:16／1:1／16:9） | P0 | 已實作 | 540×960／720×720／960×540 |
+| FR-004 | 字幕樣式（位置、大小、顏色） | P0 | 部分 | 整段字幕，無分句與時間軸 |
+| FR-005 | 匯出影片含聲音 | P0 | 未實作 | TTS 未接入錄影，匯出無聲 |
+| FR-006 | 錄影長度與語音同步 | P0 | 未實作 | 以字數估算固定秒數 |
+| FR-007 | 匯出格式相容（mp4／平台可上傳） | P0 | 未實作 | 固定 `video/webm;codecs=vp9,opus`，未檢查瀏覽器支援 |
+| FR-008 | AI 生成內容標示 | P0 | 未實作 | — |
+| FR-009 | 使用者自錄或上傳旁白 | P1 | 未實作 | `WebmRecorder` 可接 audio stream，但無 UI |
+| FR-010 | 商品 URL 分析 → 腳本建議 | P1 | 未實作 | `/studio` 只有 mock toast |
+| FR-011 | 創作者（數位人）選擇 | P1 | 未實作 | `/studio` 6 位虛構創作者為 emoji mock |
+| FR-012 | 多版本變體生成 | P2 | 未實作 | `/studio` UI 示意 |
+| FR-013 | 帳號、點數、計費 | P2 | 未實作 | `/studio` 側欄「本月生成點數」為寫死 |
+| FR-014 | 一鍵發布 IG／TikTok | P2 | 未實作 | 平台 API 與條款限制，暫不規劃 |
 
-## 9. 變更日誌
+小計：已實作 2、部分 2、未實作 10。
 
-見 [`PRD/CHANGELOG.md`](PRD/CHANGELOG.md)
+## 5. 非功能需求
+
+- 支援 Chrome、Edge 最新版；Safari 的 `MediaRecorder` 格式支援待確認，需偵測並提示。
+- 30 秒影片錄製完成後 5 秒內可下載。
+- 純前端：腳本與影片不上傳伺服器。
+
+## 6. 資料與個資處理
+
+- 目前不收集任何資料；腳本、錄音、影片只在瀏覽器記憶體中。
+- 若 M1 加入麥克風錄音：只在使用者按下錄音後取用，錄完立即釋放裝置；不上傳。
+- `/studio` 的商品網址、創作者名稱皆為虛構示意，不得換成真實品牌或真人。
+
+## 7. 法規與風險
+
+| 風險 | 說明 | 對策 |
+|---|---|---|
+| 推薦見證／不實廣告 | AI 角色以「我用過」口吻推薦商品 | 匯出預設加「AI 生成」標示；範本避免第一人稱虛構使用經驗；待法務確認 |
+| 食品／化粧品功效宣稱 | mock 腳本含睡眠、植萃等字樣 | 範本不得含療效字眼；待法務確認 |
+| 肖像權、聲音權 | 數位人或聲音克隆 | 僅用授權素材；M1 不做 |
+| 平台 AI 標示 | 各平台規定不同 | 待確認後寫入使用說明 |
+| 付費 API 成本 | 數位人按秒計費 | M1 不接；M2 前先算單支成本 |
+
+## 8. 里程碑（僅在 Sean 決定繼續時適用）
+
+| 里程碑 | 內容 |
+|---|---|
+| **M1** 誠實可用的字幕短影片 | 品質閘門、有聲匯出（使用者旁白）、分句字幕、格式相容偵測、AI 標示、`/studio` 明確隔離為原型 |
+| M2 | 10 位小編試用；評估接入付費 TTS／數位人 API 的單支成本 |
+| M3 | 依 M2 結果決定免費增值或代操專案 |
+
+## 9. 成功指標（若繼續）
+
+- M1：AC 全通過；Chrome 匯出影片可播放且有聲。
+- M2：10 位試用者中 ≥ 5 位兩週內再次使用。
+
+## 10. 合併清單
+
+無候選併入 repo。`codex/ugc-studio-release-20260928` 分支已由 PR #1 合併進 `main`（領先 0 commit），無待搬內容。
+
+## 11. README 與程式不符清單
+
+| 文件說法 | 程式實況 |
+|---|---|
+| README：「Next.js 16.2.4」 | `package.json` 為 `next 16.3.6`、`eslint-config-next 16.2.4` |
+| README／repo 描述：「AI 主播短影片生成器」 | 頭像是 emoji，無 AI 生成 |
+| README：TTS → `speechSynthesis`，Export → MediaRecorder（暗示有聲） | TTS 未進入錄影，匯出無聲 |
+| `AGENTS.md`：「4 種 Avatar 用 SVG gradient」 | 實際為 canvas 漸層 + emoji |
+| README：「Push to main 自動觸發 Vercel deploy」 | CI 的 deploy job 走 GitHub Pages（2026-09-28 run 失敗）；Vercel 是否由 Git 整合部署待確認 |
+| README：完整規格書在 Notion | repo 內另有根目錄 `SPEC.md` v2.2.1 與 `PRD/SPEC.md` v3.0.2，三份互相不一致 |
+| 舊 `PRD/SPEC.md`：「3 步拿到 .webm 短影片」 | 可拿到，但無聲、字幕不分句 |
+| `/studio` 頁面 | 首頁無連結；全部為原型示意 |
+
+## 12. 待決事項
+
+1. 是否同意暫緩；或只做 M1 字幕短影片工具。
+2. 是否願意在 M2 評估付費 TTS／數位人 API（需預算上限）。
+3. 根目錄 `SPEC.md`（v2.2.1）是否刪除或移入 `PRD/archive/`（屬檔案搬動，本 PR 不做）。
+4. `/studio` 原型是否保留在 production 路由。
